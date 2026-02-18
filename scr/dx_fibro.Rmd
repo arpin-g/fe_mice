@@ -1,0 +1,66 @@
+---
+title: "Dx Fibroblasts"
+author: "Arpine Grigoryan"
+date: "2026-02-18"
+output: html_document
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, root.dir = "~/Data/ABI/proj/sc_mice/fe_mice_git/fe_mice")
+```
+
+## We decide to only focus on fibroblasts
+
+So we subset fibroblasts from dx_integrated dataset
+```{r library, message=FALSE, warning=FALSE}
+library(Seurat)
+dx_integrated <- readRDS("../rds/dx_integrated.rds")
+DimPlot(dx_integrated, group.by = "transferred_label", label = T, repel = T)
+```
+
+Based on correspondance between clustering and annotation information, we identified 
+that clusters 0,3,5 are fibroblasts, so we only keep them
+```{r subset, warning=FALSE, message=F}
+DimPlot(dx_integrated, group.by = c("transferred_label", "seurat_clusters"), label = T, repel = T)
+dx_fibro <- subset(dx_integrated, seurat_clusters %in% c(0,3,5))
+DimPlot(dx_fibro, group.by = c("transferred_label", "seurat_clusters"), label = T, repel = T)
+```
+
+``` {r, echo = F}
+print(paste0("Number of dx fibro cells: ", length(colnames(dx_fibro))))
+```
+
+Processing the dx fibroblasts seperately, starting with sc data transformation
+```{r processing, results='hide', warning=FALSE, message=FALSE}
+seurat <- SCTransform(dx_fibro, verbose = F)
+```
+
+Running PCA on the integrated data, determining dimensionality of the dataset
+```{r pca}
+seurat <- RunPCA(seurat, verbose = FALSE)
+
+# i think including 30 pcs will be fine 
+ElbowPlot(seurat, ndims = 35)
+DimHeatmap(seurat, dims= 20:30)
+```
+
+Choosing top 30 PCs based on ElbowPlot() and visual inspection of PCs with DimHeatmap()
+
+Running rest of the downstream analysis. Clustering with defaults resolution
+```{r clustering, fig.width=9, fig.height=6, dpi=300, warning=F}
+# Step 4: identifying clusters and UMAP dim reduction
+seurat <- FindNeighbors(seurat, reduction = "pca", dims = 1:30, verbose = F)
+seurat <- FindClusters(seurat)
+seurat <- RunUMAP(seurat, dims = 1:30, reduction = "pca", verbose = F)
+
+DimPlot(seurat, reduction = "umap",
+        pt.size = 1.5, alpha = 0.75, shuffle = T, label = T)
+```
+Dx fibro seurat object saved in rds/dx_fibro.rds
+```{r save}
+# saveRDS(seurat, "rds/dx_fibro.rds")
+```
+
+```{r version}
+sessionInfo()
+```

@@ -1,0 +1,60 @@
+---
+title: "Label Transfer Dx"
+author: "Arpine Grigoryan"
+date: "2026-02-18"
+output: html_document
+---
+
+Using cell type annotation of already published dataset to annotate our cells
+
+```{r setup, include=F}
+knitr::opts_chunk$set(echo = T)
+```
+
+```{r libraries, include=F}
+library(Seurat)
+library(ggplot2)
+```
+
+Loading reference Seurat object and our DX integrated file
+
+```{r loading_samples}
+reference <- readRDS("~/Data/ABI/proj/sc_mice/fe_2/rds/ref_for_celltype.rds")
+query <- readRDS("~/Data/ABI/proj/sc_mice/fe_2/rds/dx_integrated.rds")
+```
+
+Transferring cell type annotations from [Helm et al 2023](https://www.sciencedirect.com/science/article/pii/S0022202X23020730) to our data using [Seurat Label Transfer](https://satijalab.org/seurat/archive/v3.0/integration.html)
+
+```{r transfer, message=FALSE, warning=F}
+
+# identifying anchors genes for transfer
+transfer.anchors <- FindTransferAnchors(reference = reference, 
+                                        query = query, 
+                                        dims = 1:30)
+
+# transferring the labels
+seurat <- TransferData(anchorset = transfer.anchors, 
+                       refdata = reference$cell_labels, 
+                       query = query, 
+                       dims = 1:30)
+
+# adding to seurat object
+query$transferred_label <- seurat$predicted.id
+```
+
+```{r plot}
+DimPlot(query, pt.size = 1.5, label = T, group.by = "transferred_label", 
+        repel = T, alpha = 0.75) + 
+  ggtitle("Transferred annotation from Helm et al 2023")
+
+```
+
+Seurat object saved in rds/dx_integrated.rds
+
+```{r save}
+saveRDS(seurat, "~/Data/ABI/proj/sc_mice/fe_2/rds/dx_integrated.rds")
+```
+
+```{r version}
+sessionInfo()
+```

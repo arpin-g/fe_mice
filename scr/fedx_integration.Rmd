@@ -1,0 +1,80 @@
+---
+title: "FeDx Integration"
+author: "Arpine Grigoryan"
+date: "2026-02-18"
+output: html_document
+---
+
+```{r setup, include=F}
+knitr::opts_chunk$set(echo = T)
+```
+
+```{r libraries, include=F}
+library(Seurat)
+```
+
+Loading 2 control samples
+
+```{r}
+fedx1 <- readRDS("~/Data/ABI/proj/sc_mice/fe_2/rds/fedx1_filtered.rds")
+fedx2 <- readRDS("~/Data/ABI/proj/sc_mice/fe_2/rds/fedx2_filtered.rds")
+```
+
+Integrating 2 samples to eliminate batch effects between samples, according to [revised guideline of Seurat integration using SCT assays](https://satijalab.org/seurat/archive/v4.3/sctransform_v2_vignette), based on 2000 anchor genes that are most variable across 2 samples
+
+```{r integration, message=FALSE, warning=F, results='hide'}
+
+obj.list <- list(fedx1, fedx2)
+
+# identify anchor genes
+features <- SelectIntegrationFeatures(obj.list, nfeatures = 2000)
+
+# prepare and identify anchor cells that can be used for alignment
+obj.list <- PrepSCTIntegration(obj.list, anchor.features = features)
+anchors <- FindIntegrationAnchors(obj.list, normalization.method = "SCT",
+                                  anchor.features = features)
+
+# integration
+seurat <- IntegrateData(anchors, normalization.method = "SCT")
+```
+
+Top anchor genes used for integration
+
+```{r}
+print(features[1:30])
+```
+
+Running PCA on the integrated data, determining dimensionality of the dataset
+
+```{r pca}
+seurat <- RunPCA(seurat, verbose = FALSE)
+
+# i think including 30 pcs will be fine 
+ElbowPlot(seurat, ndims = 35)
+DimHeatmap(seurat, dims= 20:30)
+```
+
+Choosing top 30 PCs based on ElbowPlot() and visual inspection of PCs with DimHeatmap()
+
+Running rest of the downstream analysis. Clustering with resolution 0.1 From UMAP we see that we don't have any batch effects between samples =\> we can move forward
+
+```{r clustering, fig.width=9, fig.height=6, dpi=300, warning=F}
+# Step 4: identifying clusters and UMAP dim reduction
+seurat <- FindNeighbors(seurat, reduction = "pca", dims = 1:30, verbose = F)
+seurat <- FindClusters(seurat, resolution = 0.1)
+seurat <- RunUMAP(seurat, dims = 1:30, reduction = "pca", verbose = F)
+
+DimPlot(seurat, reduction = "umap", group.by = "sample", pt.size = 1.5, alpha = 0.75, shuffle = T, label = T)
+
+DimPlot(seurat, reduction = "umap", group.by = "seurat_clusters", pt.size = 1.5, alpha = 0.75, shuffle = T, label = T)
+```
+
+Integrated seurat object saved in rds/fedx_integrated.rds
+
+```{r save}
+saveRDS(seurat, "~/Data/ABI/proj/sc_mice/fe_2/rds/fedx_integrated.rds")
+```
+
+```{r version}
+sessionInfo()
+```
